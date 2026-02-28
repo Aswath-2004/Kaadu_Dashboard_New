@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Register — Kaadu Dashboard{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block body %}
+<div class="auth-root">
+
+  <div class="auth-left">
+    <div class="auth-brand">
+      <div class="brand-mark">K</div>
+      <div>
+        <div class="auth-brand-name">Kaadu</div>
+        <div class="auth-brand-sub">Organic Sales Intelligence</div>
+      </div>
+    </div>
+    <div class="auth-hero-text">
+      <h1>Start analyzing<br/><span>your farm sales</span></h1>
+      <p>Create your free account and begin uploading sales files immediately. Supports any CSV or Excel format with automatic column detection.</p>
+    </div>
+    <div class="auth-features">
+      <div class="auth-feature"><span>⚡</span> Setup in under 60 seconds</div>
+      <div class="auth-feature"><span>🌱</span> Auto-detects product categories</div>
+      <div class="auth-feature"><span>📈</span> Historical upload management</div>
+      <div class="auth-feature"><span>🔐</span> Encrypted passwords</div>
+    </div>
+    <div class="auth-leaf-deco">🌿</div>
+  </div>
+
+  <div class="auth-right">
+    <div class="auth-card">
+      <div class="auth-card-header">
+        <h2>Create account</h2>
+        <p>Join Kaadu Dashboard</p>
+      </div>
+
+      <form method="POST" action="{{ url_for('auth.register') }}" class="auth-form">
+        <div class="form-group">
+          <label for="full_name">Full Name</label>
+          <div class="input-wrap">
+            <span class="input-icon">🪪</span>
+            <input type="text" id="full_name" name="full_name" class="form-input"
+                   placeholder="Your full name" value="{{ request.form.get('full_name', '') }}"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="username">Username <span class="req">*</span></label>
+          <div class="input-wrap">
+            <span class="input-icon">👤</span>
+            <input type="text" id="username" name="username" class="form-input"
+                   placeholder="e.g. kaadu_admin" required minlength="3"
+                   value="{{ request.form.get('username', '') }}"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email <span class="req">*</span></label>
+          <div class="input-wrap">
+            <span class="input-icon">📧</span>
+            <input type="email" id="email" name="email" class="form-input"
+                   placeholder="you@example.com" required
+                   value="{{ request.form.get('email', '') }}"/>
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="password">Password <span class="req">*</span></label>
+            <div class="input-wrap">
+              <span class="input-icon">🔑</span>
+              <input type="password" id="password" name="password" class="form-input"
+                     placeholder="Min 6 chars" required minlength="6"/>
+              <button type="button" class="input-toggle" onclick="togglePass('password')">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="confirm_password">Confirm Password <span class="req">*</span></label>
+            <div class="input-wrap">
+              <span class="input-icon">🔑</span>
+              <input type="password" id="confirm_password" name="confirm_password"
+                     class="form-input" placeholder="Repeat password" required minlength="6"/>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-auth">Create Account →</button>
+      </form>
+
+      <div class="auth-divider"><span>or</span></div>
+
+      <div class="auth-switch">
+        Already have an account?
+        <a href="{{ url_for('auth.login') }}">Sign in</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePass(id) {
+  const inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+</script>
+{% endblock %}

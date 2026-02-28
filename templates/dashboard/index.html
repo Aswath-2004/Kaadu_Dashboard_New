@@ -1,0 +1,1106 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Kaadu Organic{% endblock %}
+
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block body %}
+
+<!-- ═══ HEADER ═══ -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-icon">K</div>
+      <div>
+        <div class="brand-name">OrganicSalesDashboard</div>
+        <div class="brand-sub">Kaadu Farm Analytics</div>
+      </div>
+    </div>
+    <nav class="header-nav">
+      <button class="nav-btn active" id="nav-overview"      onclick="switchTab('overview')">📊 Overview</button>
+      <button class="nav-btn"        id="nav-drill"         onclick="switchTab('drill')">🔍 Product Analysis</button>
+      <button class="nav-btn"        id="nav-transactions"  onclick="switchTab('transactions')">📋 Transactions</button>
+      <button class="nav-btn"        id="nav-uploads"       onclick="switchTab('uploads')">📂 Uploads</button>
+    </nav>
+    <div class="header-user">
+      <div class="user-badge">
+        <div class="user-avatar">{{ current_user.username[0]|upper }}</div>
+        <span class="user-name">{{ current_user.full_name or current_user.username }}</span>
+      </div>
+      <a href="{{ url_for('auth.logout') }}" class="btn-logout">Logout</a>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-tag">🌱 Organic Farm Intelligence</div>
+    <h1>Analyze &amp; visualize your<br/><span>organic farm sales data</span></h1>
+    <p>Full filter control — select a category, product, and date range to instantly update every chart, table, and KPI across the entire dashboard.</p>
+    <div class="hero-kpis">
+      <div class="hero-kpi"><div class="hero-kpi-val" id="hk-total">—</div><div class="hero-kpi-lbl">Revenue</div></div>
+      <div class="hero-div"></div>
+      <div class="hero-kpi"><div class="hero-kpi-val" id="hk-records">—</div><div class="hero-kpi-lbl">Transactions</div></div>
+      <div class="hero-div"></div>
+      <div class="hero-kpi"><div class="hero-kpi-val" id="hk-customers">—</div><div class="hero-kpi-lbl">Customers</div></div>
+      <div class="hero-div"></div>
+      <div class="hero-kpi"><div class="hero-kpi-val" id="hk-products">—</div><div class="hero-kpi-lbl">Products</div></div>
+      <div class="hero-div"></div>
+      <div class="hero-kpi"><div class="hero-kpi-val" id="hk-file">—</div><div class="hero-kpi-lbl">Active File</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  GLOBAL FILTER BAR — sticks below header                -->
+<!-- ═══════════════════════════════════════════════════════ -->
+{% if active_upload %}
+<div class="global-filter-bar" id="global-filter-bar">
+  <div class="gf-inner">
+
+    <!-- Category -->
+    <div class="gf-group">
+      <label class="gf-label">Category</label>
+      <select class="gf-select" id="gf-cat" onchange="onCategoryChange()">
+        <option value="all">All Categories</option>
+      </select>
+    </div>
+
+    <!-- Product (populated dynamically) -->
+    <div class="gf-group">
+      <label class="gf-label">Product</label>
+      <select class="gf-select" id="gf-product" onchange="applyAllFilters()">
+        <option value="all">All Products</option>
+      </select>
+    </div>
+
+    <div class="gf-divider"></div>
+
+    <!-- Quick date presets -->
+    <div class="gf-group">
+      <label class="gf-label">Quick Period</label>
+      <div class="gf-pills">
+        <button class="gf-pill" onclick="setPreset('all')">All</button>
+        <button class="gf-pill" onclick="setPreset('3m')">3M</button>
+        <button class="gf-pill" onclick="setPreset('6m')">6M</button>
+        <button class="gf-pill" onclick="setPreset('q1')">Q1</button>
+        <button class="gf-pill" onclick="setPreset('q2')">Q2</button>
+        <button class="gf-pill" onclick="setPreset('q3')">Q3</button>
+        <button class="gf-pill" onclick="setPreset('q4')">Q4</button>
+      </div>
+    </div>
+
+    <div class="gf-divider"></div>
+
+    <!-- Custom date range -->
+    <div class="gf-group">
+      <label class="gf-label">From</label>
+      <input type="date" class="gf-date" id="gf-from" onchange="applyAllFilters()" />
+    </div>
+    <div class="gf-group">
+      <label class="gf-label">To</label>
+      <input type="date" class="gf-date" id="gf-to"   onchange="applyAllFilters()" />
+    </div>
+
+    <!-- Active filter summary -->
+    <div class="gf-summary" id="gf-summary">Loading…</div>
+
+    <button class="gf-reset" onclick="resetAllFilters()" title="Reset all filters">↺ Reset</button>
+  </div>
+</div>
+{% endif %}
+
+<!-- ═══ TAB: OVERVIEW ═══ -->
+<div id="tab-overview" class="tab-content active">
+<div class="page-wrap">
+
+  <!-- Upload strip -->
+  <div class="upload-strip" id="upload-strip">
+    <div class="upload-strip-left">
+      <span>📂</span>
+      <div>
+        <div class="upload-strip-title">Upload New Sales File</div>
+        <div class="upload-strip-sub">CSV or Excel · Up to 16MB · Any column format automatically detected</div>
+      </div>
+    </div>
+    <form method="POST" action="{{ url_for('main.upload_file') }}" enctype="multipart/form-data" id="upload-form">
+      <label class="upload-label">
+        <input type="file" name="file" id="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileChange(this)"/>
+        <span id="file-label-text">Choose File</span>
+      </label>
+      <button type="submit" class="btn-upload" id="btn-upload" style="display:none">Upload &amp; Process →</button>
+    </form>
+    <div class="upload-drag-hint">or drag &amp; drop here</div>
+  </div>
+
+  {% if not active_upload %}
+  <div class="empty-state">
+    <div class="empty-icon">📊</div>
+    <h3>No data loaded yet</h3>
+    <p>Upload a CSV or Excel file above to see your sales analytics.</p>
+    <p style="font-size:13px;margin-top:8px;color:#9A9A9A">Supports: Date · Party Name · Invoice No. · Item Name · Quantity · Unit · Amount</p>
+  </div>
+  {% else %}
+
+  <!-- ── KPI Grid ── -->
+  <div class="kpi-grid">
+    <div class="kpi-card accent-green">
+      <div class="kpi-icon-wrap green">💰</div>
+      <div class="kpi-label">Total Revenue</div>
+      <div class="kpi-val"><small>₹</small><span id="kpi-revenue">—</span></div>
+      <div class="kpi-sub" id="kpi-rev-sub">Gross sales</div>
+    </div>
+    <div class="kpi-card accent-gold">
+      <div class="kpi-icon-wrap gold">🧾</div>
+      <div class="kpi-label">Total Invoices</div>
+      <div class="kpi-val" id="kpi-invoices">—</div>
+      <div class="kpi-sub">Unique invoices</div>
+    </div>
+    <div class="kpi-card accent-sage">
+      <div class="kpi-icon-wrap sage">👥</div>
+      <div class="kpi-label">Customers</div>
+      <div class="kpi-val" id="kpi-customers">—</div>
+      <div class="kpi-sub">Unique buyers</div>
+    </div>
+    <div class="kpi-card accent-brown">
+      <div class="kpi-icon-wrap brown">🌾</div>
+      <div class="kpi-label">Products</div>
+      <div class="kpi-val" id="kpi-products">—</div>
+      <div class="kpi-sub">Distinct SKUs</div>
+    </div>
+    <div class="kpi-card accent-green">
+      <div class="kpi-icon-wrap green">📦</div>
+      <div class="kpi-label">Avg Invoice Value</div>
+      <div class="kpi-val"><small>₹</small><span id="kpi-avg">—</span></div>
+      <div class="kpi-sub">Per transaction</div>
+    </div>
+  </div>
+
+  <!-- ── Row 1: Monthly trend + Category pie ── -->
+  <div class="charts-row two-col">
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title" id="monthly-title">Monthly Revenue Trend</div>
+          <div class="chart-sub" id="monthly-sub">Revenue by month — filtered by selection</div>
+        </div>
+        <span class="chart-tag">Bar</span>
+      </div>
+      <div class="chart-body tall"><canvas id="chart-monthly"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title">Category Distribution</div>
+          <div class="chart-sub">Share by product category (date filtered)</div>
+        </div>
+        <span class="chart-tag">Pie</span>
+      </div>
+      <div class="chart-body tall"><canvas id="chart-pie"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ── Row 2: Top products + Top customers ── -->
+  <div class="charts-row two-col">
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title" id="prod-title">Top 12 Products by Revenue</div>
+          <div class="chart-sub" id="prod-sub">Filtered by selected category &amp; period</div>
+        </div>
+        <span class="chart-tag">H-Bar</span>
+      </div>
+      <div class="chart-body xtall"><canvas id="chart-products"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title" id="cust-title">Top 10 Customers</div>
+          <div class="chart-sub" id="cust-sub">Revenue contribution — filtered</div>
+        </div>
+        <span class="chart-tag">Table</span>
+      </div>
+      <div class="table-scroll" style="max-height:440px">
+        <table class="dt">
+          <thead><tr><th>#</th><th>Customer</th><th>Revenue</th><th>Invoices</th><th>Share</th></tr></thead>
+          <tbody id="tbl-customers"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Row 3: Category bar + Trend line ── -->
+  <div class="charts-row two-col">
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title">Category Revenue</div>
+          <div class="chart-sub">Total revenue per category (date filtered)</div>
+        </div>
+        <span class="chart-tag">Column</span>
+      </div>
+      <div class="chart-body medium"><canvas id="chart-catbar"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title" id="trend-title">Revenue Trend Line</div>
+          <div class="chart-sub" id="trend-sub">Monthly trend for selected filters</div>
+        </div>
+        <span class="chart-tag">Line</span>
+      </div>
+      <div class="chart-body medium"><canvas id="chart-line"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ── Row 4: Products full table + Category donut ── -->
+  <div class="charts-row two-col">
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title" id="ptable-title">Product Revenue Table</div>
+          <div class="chart-sub" id="ptable-sub">All products — ranked by revenue</div>
+        </div>
+        <span class="chart-tag">Table</span>
+      </div>
+      <div class="table-scroll" style="max-height:400px">
+        <table class="dt">
+          <thead><tr><th>#</th><th>Product</th><th>Category</th><th>Revenue</th><th>Qty</th><th>%</th></tr></thead>
+          <tbody id="tbl-products"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title" id="donut-title">Category Breakdown</div>
+          <div class="chart-sub" id="donut-sub">Top products in selected category</div>
+        </div>
+        <span class="chart-tag">Doughnut</span>
+      </div>
+      <div class="chart-body tall"><canvas id="chart-donut"></canvas></div>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+</div>
+
+<!-- ═══ TAB: PRODUCT ANALYSIS (Drill-Down) ═══ -->
+<div id="tab-drill" class="tab-content">
+<div class="page-wrap">
+  {% if not active_upload %}
+  <div class="empty-state"><div class="empty-icon">🔍</div><h3>No data loaded</h3></div>
+  {% else %}
+
+  <!-- Drill-down header -->
+  <div class="drill-header">
+    <div class="drill-header-left">
+      <h2 class="drill-title" id="drill-title">Product Deep-Dive</h2>
+      <p class="drill-subtitle" id="drill-subtitle">Select a category above to explore all products within it — or view all products ranked.</p>
+    </div>
+    <div class="drill-kpis" id="drill-kpis">
+      <div class="dkpi"><div class="dkpi-val" id="dk-revenue">—</div><div class="dkpi-lbl">Revenue</div></div>
+      <div class="dkpi-div"></div>
+      <div class="dkpi"><div class="dkpi-val" id="dk-products">—</div><div class="dkpi-lbl">Products</div></div>
+      <div class="dkpi-div"></div>
+      <div class="dkpi"><div class="dkpi-val" id="dk-customers">—</div><div class="dkpi-lbl">Customers</div></div>
+      <div class="dkpi-div"></div>
+      <div class="dkpi"><div class="dkpi-val" id="dk-invoices">—</div><div class="dkpi-lbl">Invoices</div></div>
+    </div>
+  </div>
+
+  <!-- Row 1: Product breakdown bar -->
+  <div class="chart-card" style="margin-bottom:18px">
+    <div class="chart-hd">
+      <div>
+        <div class="chart-title" id="breakdown-title">All Products — Revenue Breakdown</div>
+        <div class="chart-sub" id="breakdown-sub">Top 25 products ranked by revenue within selected filters</div>
+      </div>
+      <span class="chart-tag">H-Bar</span>
+    </div>
+    <div class="chart-body" id="breakdown-wrap" style="height:520px"><canvas id="chart-breakdown"></canvas></div>
+  </div>
+
+  <!-- Row 2: Product monthly trend + Top customers for selection -->
+  <div class="charts-row two-col">
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title" id="ptend-title">Monthly Trend</div>
+          <div class="chart-sub" id="ptend-sub">Revenue over time for selected category/product</div>
+        </div>
+        <span class="chart-tag">Line</span>
+      </div>
+      <div class="chart-body tall"><canvas id="chart-ptend"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div>
+          <div class="chart-title" id="dcust-title">Top Customers</div>
+          <div class="chart-sub" id="dcust-sub">For selected category / product</div>
+        </div>
+        <span class="chart-tag">Table</span>
+      </div>
+      <div class="table-scroll" style="max-height:380px">
+        <table class="dt">
+          <thead><tr><th>#</th><th>Customer</th><th>Revenue</th><th>Invoices</th><th>Share</th></tr></thead>
+          <tbody id="tbl-dcust"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Full product table with details -->
+  <div class="chart-card">
+    <div class="chart-hd">
+      <div>
+        <div class="chart-title" id="dtable-title">Complete Product Details</div>
+        <div class="chart-sub">Revenue, quantity, customers, and invoices for every product</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input class="search-inp" id="drill-search" placeholder="Search products…" oninput="filterDrillTable()" style="width:200px"/>
+        <span class="chart-tag" id="dtable-count">—</span>
+      </div>
+    </div>
+    <div class="table-scroll" style="max-height:480px">
+      <table class="dt">
+        <thead>
+          <tr>
+            <th>#</th><th>Product</th><th>Category</th>
+            <th>Revenue ↓</th><th>Qty</th><th>Customers</th><th>Invoices</th><th>% Share</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-drill"></tbody>
+      </table>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+</div>
+
+<!-- ═══ TAB: TRANSACTIONS ═══ -->
+<div id="tab-transactions" class="tab-content">
+<div class="page-wrap">
+  <div class="chart-card">
+    <div class="chart-hd">
+      <div><div class="chart-title">Transaction Records</div><div class="chart-sub">Full searchable history — filters above apply here too</div></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="search-wrap">
+          <span class="si">🔍</span>
+          <input class="search-inp" id="tx-search" placeholder="Customer, product, invoice…" oninput="loadTransactions(1)"/>
+        </div>
+        <select class="gf-select" id="tx-sort" onchange="loadTransactions(1)">
+          <option value="amount">Sort: Amount</option>
+          <option value="date">Sort: Date</option>
+          <option value="party">Sort: Customer</option>
+          <option value="product">Sort: Product</option>
+        </select>
+        <div class="fb-count" id="tx-count">—</div>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table class="dt">
+        <thead><tr>
+          <th>Invoice</th><th>Date</th><th>Customer</th>
+          <th>Product</th><th>Category</th><th>Qty</th><th>Unit</th><th>Amount</th>
+        </tr></thead>
+        <tbody id="tx-body"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <div class="pg-info" id="pg-info">—</div>
+      <div class="pg-btns">
+        <button class="pg-btn" id="btn-prev" onclick="txPageChange(-1)" disabled>← Prev</button>
+        <div id="pg-nums" style="display:flex;gap:4px"></div>
+        <button class="pg-btn" id="btn-next" onclick="txPageChange(1)">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══ TAB: UPLOADS ═══ -->
+<div id="tab-uploads" class="tab-content">
+<div class="page-wrap">
+  <div class="chart-card">
+    <div class="chart-hd">
+      <div><div class="chart-title">Upload History</div><div class="chart-sub">Switch between datasets or delete old uploads</div></div>
+    </div>
+    {% if uploads %}
+    <table class="dt">
+      <thead><tr><th>File</th><th>Records</th><th>Revenue</th><th>Customers</th><th>Uploaded</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for u in uploads %}
+        <tr class="{{ 'active-row' if u.is_active else '' }}">
+          <td style="font-weight:600">{{ u.original_name }}</td>
+          <td>{{ '{:,}'.format(u.record_count|default(0)|int) }}</td>
+          <td class="mono">₹{{ '{:,.0f}'.format(u.total_amount|default(0)) }}</td>
+          <td>{{ u.unique_customers|default(0) }}</td>
+          <td style="font-size:12px;color:#7A7A7A">{{ u.uploaded_at.strftime('%d %b %Y, %H:%M') }}</td>
+          <td>{% if u.is_active %}<span class="status-active">● Active</span>{% else %}<span class="status-inactive">○ Inactive</span>{% endif %}</td>
+          <td>
+            <div style="display:flex;gap:8px">
+              {% if not u.is_active %}<a href="{{ url_for('main.switch_upload', upload_id=u.id) }}" class="tbl-btn tbl-btn-green">Activate</a>{% endif %}
+              <form method="POST" action="{{ url_for('main.delete_upload', upload_id=u.id) }}" onsubmit="return confirm('Delete this upload and all its records?')">
+                <button type="submit" class="tbl-btn tbl-btn-red">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state"><div class="empty-icon">📂</div><h3>No uploads yet</h3></div>
+    {% endif %}
+  </div>
+</div>
+</div>
+
+<footer class="site-footer">
+  <b>Kaadu Organic Farm</b> · Sales Dashboard · Flask + Chart.js · All figures in INR
+</footer>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ═══════════════════════════════════════════════════════
+//  GLOBAL STATE
+// ═══════════════════════════════════════════════════════
+const HAS_DATA = {{ 'true' if active_upload else 'false' }};
+let charts = {};
+let txPage = 1;
+let dateBounds = { min: '', max: '' };
+let drillData = [];   // cached product breakdown rows
+
+// Filter state (single source of truth)
+const F = { category: 'all', product: 'all', dateFrom: '', dateTo: '' };
+
+const CAT_COLORS = [
+  '#1E4D2B','#2D6A3F','#4CAF50','#C6A84B','#8BC34A',
+  '#7A5230','#5A8A68','#E8D28A','#66BB6A','#9C6B3A',
+  '#558B2F','#B8860B','#A5D6A7','#795548','#FF8F00',
+];
+
+// ═══ FORMAT HELPERS ════════════════════════════════════
+function fmt(n) {
+  n = parseFloat(n) || 0;
+  if (n >= 10000000) return (n/10000000).toFixed(2) + ' Cr';
+  if (n >= 100000)   return (n/100000).toFixed(2) + ' L';
+  if (n >= 1000)     return (n/1000).toFixed(1) + 'K';
+  return n.toFixed(0);
+}
+function fmtFull(n) {
+  return (parseFloat(n)||0).toLocaleString('en-IN', {maximumFractionDigits:0});
+}
+function monthLabel(m) {
+  const [y, mo] = m.split('-');
+  const n = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return n[parseInt(mo)] + " '" + y.slice(2);
+}
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+// ═══ API ═══════════════════════════════════════════════
+function qs() {
+  const p = new URLSearchParams();
+  if (F.category !== 'all') p.set('category', F.category);
+  if (F.product  !== 'all') p.set('product',  F.product);
+  if (F.dateFrom)           p.set('date_from', F.dateFrom);
+  if (F.dateTo)             p.set('date_to',   F.dateTo);
+  return p.toString();
+}
+async function api(url) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    return r.json();
+  } catch(e) { return null; }
+}
+
+// ═══ TABS ══════════════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('nav-' + tab).classList.add('active');
+  if (tab === 'transactions') loadTransactions(1);
+  if (tab === 'drill')        loadDrillTab();
+}
+
+// ═══ FILTER CONTROLS ═══════════════════════════════════
+async function onCategoryChange() {
+  F.category = document.getElementById('gf-cat').value;
+  F.product = 'all';
+  await repopulateProducts();
+  applyAllFilters();
+}
+
+async function repopulateProducts() {
+  const sel = document.getElementById('gf-product');
+  sel.innerHTML = '<option value="all">All Products</option>';
+  if (F.category === 'all') return;
+  const prods = await api(`/api/product-list?category=${encodeURIComponent(F.category)}`);
+  if (prods) {
+    prods.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p; o.textContent = p.length > 45 ? p.slice(0,45)+'…' : p;
+      sel.appendChild(o);
+    });
+  }
+}
+
+function setPreset(preset) {
+  // Highlight pill
+  document.querySelectorAll('.gf-pill').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+
+  if (!dateBounds.min) return;
+  const today = new Date(dateBounds.max || new Date());
+  const minDate = new Date(dateBounds.min);
+
+  const setRange = (from, to) => {
+    document.getElementById('gf-from').value = from;
+    document.getElementById('gf-to').value   = to;
+    F.dateFrom = from;
+    F.dateTo   = to;
+  };
+
+  if (preset === 'all') {
+    setRange('', '');
+    document.getElementById('gf-from').value = '';
+    document.getElementById('gf-to').value   = '';
+    F.dateFrom = ''; F.dateTo = '';
+  } else if (preset === '3m') {
+    const from = new Date(today); from.setMonth(from.getMonth() - 3);
+    setRange(from.toISOString().slice(0,10), dateBounds.max);
+  } else if (preset === '6m') {
+    const from = new Date(today); from.setMonth(from.getMonth() - 6);
+    setRange(from.toISOString().slice(0,10), dateBounds.max);
+  } else {
+    // Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar  (Kaadu FY)
+    const year = today.getFullYear();
+    const qMap = {
+      q1: [`${year}-04-01`, `${year}-06-30`],
+      q2: [`${year}-07-01`, `${year}-09-30`],
+      q3: [`${year}-10-01`, `${year}-12-31`],
+      q4: [`${year}-01-01`, `${year}-03-31`],
+    };
+    if (qMap[preset]) { setRange(...qMap[preset]); }
+  }
+  applyAllFilters();
+}
+
+function applyAllFilters() {
+  F.category = document.getElementById('gf-cat').value;
+  F.product  = document.getElementById('gf-product').value;
+  F.dateFrom = document.getElementById('gf-from').value;
+  F.dateTo   = document.getElementById('gf-to').value;
+  updateFilterSummary();
+  loadAllCharts();
+  if (document.getElementById('tab-transactions').classList.contains('active')) loadTransactions(1);
+  if (document.getElementById('tab-drill').classList.contains('active')) loadDrillTab();
+}
+
+function resetAllFilters() {
+  F.category = 'all'; F.product = 'all'; F.dateFrom = ''; F.dateTo = '';
+  document.getElementById('gf-cat').value     = 'all';
+  document.getElementById('gf-product').value = 'all';
+  document.getElementById('gf-from').value    = '';
+  document.getElementById('gf-to').value      = '';
+  document.querySelectorAll('.gf-pill').forEach(p => p.classList.remove('active'));
+  document.querySelector('.gf-pill')?.classList.add('active');
+  applyAllFilters();
+}
+
+function updateFilterSummary() {
+  const parts = [];
+  if (F.category !== 'all') parts.push(`📁 ${F.category}`);
+  if (F.product  !== 'all') parts.push(`🌾 ${F.product.slice(0,30)}`);
+  if (F.dateFrom || F.dateTo) {
+    const from = F.dateFrom ? new Date(F.dateFrom).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}) : 'Start';
+    const to   = F.dateTo   ? new Date(F.dateTo).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}) : 'End';
+    parts.push(`📅 ${from} → ${to}`);
+  }
+  const el = document.getElementById('gf-summary');
+  if (el) el.textContent = parts.length ? parts.join('  ·  ') : 'Showing all data';
+}
+
+// ═══ LOAD ALL CHARTS ═══════════════════════════════════
+async function loadAllCharts() {
+  if (!HAS_DATA) return;
+  updateChartTitles();
+  await Promise.all([
+    loadStats(),
+    loadMonthly(),
+    loadPie(),
+    loadProducts(),
+    loadCustomers(),
+    loadCatBar(),
+    loadTrendLine(),
+    loadDonut(),
+    loadProductsTable(),
+  ]);
+}
+
+function updateChartTitles() {
+  const cat  = F.category !== 'all' ? F.category : null;
+  const prod = F.product  !== 'all' ? F.product.slice(0,30)  : null;
+  const suffix = [cat, prod].filter(Boolean).join(' › ') || 'All Data';
+
+  document.getElementById('monthly-title').textContent = `Monthly Revenue — ${suffix}`;
+  document.getElementById('prod-title').textContent    = cat ? `Top Products in ${cat}` : 'Top 12 Products';
+  document.getElementById('prod-sub').textContent      = `Filtered: ${suffix}`;
+  document.getElementById('cust-title').textContent    = `Top 10 Customers — ${suffix}`;
+  document.getElementById('cust-sub').textContent      = `Revenue contribution · filtered`;
+  document.getElementById('trend-title').textContent   = `Trend Line — ${suffix}`;
+  document.getElementById('donut-title').textContent   = cat ? `${cat} Breakdown` : 'Category Breakdown';
+  document.getElementById('ptable-title').textContent  = `Products — ${suffix}`;
+}
+
+// ── Stats ────────────────────────────────────────────────
+async function loadStats() {
+  const d = await api('/api/stats?' + qs());
+  if (!d || d.error) return;
+  document.getElementById('kpi-revenue').textContent   = fmtFull(d.total_amount);
+  document.getElementById('kpi-invoices').textContent  = (d.unique_invoices||0).toLocaleString();
+  document.getElementById('kpi-customers').textContent = (d.unique_customers||0).toLocaleString();
+  document.getElementById('kpi-products').textContent  = (d.unique_products||0).toLocaleString();
+  document.getElementById('kpi-avg').textContent       = fmtFull(d.avg_invoice);
+  document.getElementById('hk-total').textContent      = '₹' + fmt(d.total_amount);
+  document.getElementById('hk-records').textContent    = (d.record_count||0).toLocaleString();
+  document.getElementById('hk-customers').textContent  = d.unique_customers || 0;
+  document.getElementById('hk-products').textContent   = d.unique_products || 0;
+  document.getElementById('hk-file').textContent       = (d.filename||'').split('.')[0] || '—';
+  const sub = (d.date_from !== 'N/A')
+    ? `${d.date_from} → ${d.date_to}`
+    : 'No dated records in selection';
+  document.getElementById('kpi-rev-sub').textContent = sub;
+}
+
+// ── Monthly bar ─────────────────────────────────────────
+async function loadMonthly() {
+  const rows = await api('/api/monthly?' + qs());
+  if (!rows) return;
+  destroyChart('monthly');
+  const ctx = document.getElementById('chart-monthly').getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,0,300);
+  grad.addColorStop(0,'rgba(30,77,43,0.88)'); grad.addColorStop(1,'rgba(45,106,63,0.25)');
+  charts['monthly'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => monthLabel(r.month)),
+      datasets: [{ label:'Revenue (₹)', data: rows.map(r=>r.amount),
+        backgroundColor: grad, borderColor:'#1E4D2B', borderWidth:1.5,
+        borderRadius:6, borderSkipped:false }]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>'₹'+fmtFull(c.raw)}} },
+      scales:{
+        x:{grid:{display:false}, ticks:{font:{family:'DM Sans',size:11},color:'#7A7A7A'}},
+        y:{grid:{color:'rgba(0,0,0,0.05)'}, ticks:{font:{family:'DM Sans',size:11},callback:v=>'₹'+fmt(v),color:'#7A7A7A'}}
+      }
+    }
+  });
+}
+
+// ── Pie ─────────────────────────────────────────────────
+async function loadPie() {
+  const rows = await api('/api/categories?' + qs());
+  if (!rows || !rows.length) return;
+  destroyChart('pie');
+  const ctx = document.getElementById('chart-pie').getContext('2d');
+  charts['pie'] = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: rows.map(r=>r.category),
+      datasets:[{ data: rows.map(r=>r.amount), backgroundColor: CAT_COLORS, borderColor:'white', borderWidth:2 }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'right',labels:{font:{family:'DM Sans',size:11},padding:10,boxWidth:12}},
+        tooltip:{callbacks:{label:c=>`${c.label}: ₹${fmt(c.raw)} (${rows[c.dataIndex].pct}%)`}}
+      }
+    }
+  });
+}
+
+// ── Products H-bar ──────────────────────────────────────
+async function loadProducts() {
+  const rows = await api('/api/top-products?limit=12&' + qs());
+  if (!rows || !rows.length) return;
+  destroyChart('products');
+  const ctx = document.getElementById('chart-products').getContext('2d');
+  const colors = rows.map(r => CAT_COLORS[
+    ['Rice','Jaggery Products','Oils','Spices','Dals & Pulses','Millets','Flours',
+     'Coffee','Health Products','Honey','Ghee & Butter','Coconut','Aval (Poha)','Fresh Produce','Other']
+     .indexOf(r.category) % CAT_COLORS.length
+  ] || CAT_COLORS[0]);
+  charts['products'] = new Chart(ctx, {
+    type: 'bar',
+    data:{
+      labels: rows.map(r=> r.product.length>38 ? r.product.slice(0,38)+'…' : r.product),
+      datasets:[{ label:'Revenue (₹)', data: rows.map(r=>r.amount),
+        backgroundColor: colors, borderRadius:5, borderSkipped:false }]
+    },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>`₹${fmtFull(c.raw)} (${rows[c.dataIndex].pct}%)`}} },
+      scales:{
+        x:{grid:{color:'rgba(0,0,0,0.05)'}, ticks:{font:{family:'DM Sans',size:11},callback:v=>'₹'+fmt(v),color:'#7A7A7A'}},
+        y:{grid:{display:false}, ticks:{font:{family:'DM Sans',size:11},color:'#333'}}
+      }
+    }
+  });
+}
+
+// ── Customers table ─────────────────────────────────────
+async function loadCustomers() {
+  const rows = await api('/api/top-customers?limit=10&' + qs());
+  if (!rows || !rows.length) return;
+  const maxAmt = rows[0].amount;
+  document.getElementById('tbl-customers').innerHTML = rows.map((r,i) => {
+    const rc = i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-o';
+    return `<tr>
+      <td><span class="rank ${rc}">${i+1}</span></td>
+      <td><div style="font-weight:500">${r.customer}</div>
+          <div class="bar-fill" style="width:${Math.round(r.amount/maxAmt*100)}%"></div></td>
+      <td class="mono">₹${fmtFull(r.amount)}</td>
+      <td style="text-align:right;color:#7A7A7A">${r.invoices}</td>
+      <td><span class="chip">${r.pct}%</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Category bar ────────────────────────────────────────
+async function loadCatBar() {
+  const rows = await api('/api/categories?' + qs());
+  if (!rows || !rows.length) return;
+  destroyChart('catbar');
+  const ctx = document.getElementById('chart-catbar').getContext('2d');
+  charts['catbar'] = new Chart(ctx, {
+    type:'bar',
+    data:{ labels: rows.map(r=>r.category),
+      datasets:[{ label:'Revenue', data: rows.map(r=>r.amount),
+        backgroundColor: CAT_COLORS, borderRadius:6, borderSkipped:false }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>'₹'+fmtFull(c.raw)}} },
+      scales:{
+        x:{grid:{display:false}, ticks:{font:{family:'DM Sans',size:10},color:'#7A7A7A',maxRotation:35}},
+        y:{grid:{color:'rgba(0,0,0,0.05)'}, ticks:{font:{family:'DM Sans',size:10},callback:v=>'₹'+fmt(v),color:'#7A7A7A'}}
+      }
+    }
+  });
+}
+
+// ── Trend line (uses product-trend which respects all filters) ──
+async function loadTrendLine() {
+  const rows = await api('/api/product-trend?' + qs());
+  if (!rows || !rows.length) return;
+  destroyChart('line');
+  const ctx = document.getElementById('chart-line').getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,0,220);
+  grad.addColorStop(0,'rgba(30,77,43,0.18)'); grad.addColorStop(1,'rgba(30,77,43,0.02)');
+  charts['line'] = new Chart(ctx, {
+    type:'line',
+    data:{ labels: rows.map(r=>monthLabel(r.month)),
+      datasets:[{ label:'Revenue',
+        data: rows.map(r=>r.amount),
+        borderColor:'#1E4D2B', backgroundColor: grad,
+        borderWidth:2.5, tension:0.38, fill:true,
+        pointRadius:4, pointBackgroundColor:'#1E4D2B', pointHoverRadius:6 }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>'₹'+fmtFull(c.raw)}} },
+      scales:{
+        x:{grid:{display:false}, ticks:{font:{family:'DM Sans',size:10},color:'#7A7A7A'}},
+        y:{grid:{color:'rgba(0,0,0,0.05)'}, ticks:{font:{family:'DM Sans',size:10},callback:v=>'₹'+fmt(v),color:'#7A7A7A'}}
+      }
+    }
+  });
+}
+
+// ── Donut ───────────────────────────────────────────────
+async function loadDonut() {
+  const cat = F.category !== 'all' ? F.category : null;
+  const rows = await api('/api/product-breakdown?limit=8&' + qs());
+  if (!rows || !rows.length) return;
+  destroyChart('donut');
+  const ctx = document.getElementById('chart-donut').getContext('2d');
+  const dc = ['#1E4D2B','#2D6A3F','#4CAF50','#7DC67E','#A8D8AA','#C8E6C9','#E8F5E9','#F1F8E9'];
+  charts['donut'] = new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels: rows.map(r=> r.product.length>28?r.product.slice(0,28)+'…':r.product),
+      datasets:[{ data: rows.map(r=>r.amount), backgroundColor:dc, borderColor:'white', borderWidth:3, hoverOffset:8 }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'bottom',labels:{font:{family:'DM Sans',size:11},padding:8,boxWidth:12}},
+        tooltip:{callbacks:{label:c=>`₹${fmtFull(c.raw)} (${rows[c.dataIndex].pct}%)`}} },
+      cutout:'60%'
+    }
+  });
+  document.getElementById('donut-sub').textContent = cat
+    ? `Top products in ${cat}` : 'Top products across all categories';
+}
+
+// ── Products table ──────────────────────────────────────
+async function loadProductsTable() {
+  const rows = await api('/api/top-products?limit=30&' + qs());
+  if (!rows) return;
+  document.getElementById('tbl-products').innerHTML = rows.map((r,i) => `<tr>
+    <td style="color:#9A9A9A;font-size:12px">${i+1}</td>
+    <td style="font-weight:500">${r.product}</td>
+    <td><span class="chip-cat">${r.category}</span></td>
+    <td class="mono">₹${fmtFull(r.amount)}</td>
+    <td style="color:#7A7A7A;text-align:right">${r.qty}</td>
+    <td><span class="chip">${r.pct}%</span></td>
+  </tr>`).join('');
+}
+
+// ═══ DRILL-DOWN TAB ════════════════════════════════════
+async function loadDrillTab() {
+  if (!HAS_DATA) return;
+
+  const cat  = F.category !== 'all' ? F.category : null;
+  const prod = F.product  !== 'all' ? F.product  : null;
+  const label = prod ? prod.slice(0,40) : cat ? cat : 'All Products';
+
+  document.getElementById('drill-title').textContent    = `Deep-Dive: ${label}`;
+  document.getElementById('breakdown-title').textContent = prod ? `Monthly breakdown for: ${prod.slice(0,50)}` : `All Products in: ${cat || 'All Categories'}`;
+
+  await Promise.all([
+    loadDrillStats(),
+    loadBreakdownChart(),
+    loadProductTrend(),
+    loadDrillCustomers(),
+    loadDrillTable(),
+  ]);
+}
+
+async function loadDrillStats() {
+  const d = await api('/api/stats?' + qs());
+  if (!d) return;
+  document.getElementById('dk-revenue').textContent  = '₹' + fmt(d.total_amount);
+  document.getElementById('dk-products').textContent = d.unique_products || 0;
+  document.getElementById('dk-customers').textContent= d.unique_customers || 0;
+  document.getElementById('dk-invoices').textContent = d.unique_invoices || 0;
+}
+
+async function loadBreakdownChart() {
+  const rows = await api('/api/product-breakdown?limit=25&' + qs());
+  if (!rows || !rows.length) return;
+  drillData = rows; // cache for search
+
+  destroyChart('breakdown');
+  const ctx = document.getElementById('chart-breakdown').getContext('2d');
+  // Dynamic height based on number of bars
+  const h = Math.max(340, rows.length * 34);
+  document.getElementById('breakdown-wrap').style.height = h + 'px';
+
+  charts['breakdown'] = new Chart(ctx, {
+    type: 'bar',
+    data:{
+      labels: rows.map(r => r.product.length>40 ? r.product.slice(0,40)+'…' : r.product),
+      datasets:[{
+        label:'Revenue (₹)', data: rows.map(r=>r.amount),
+        backgroundColor: rows.map((_,i) => CAT_COLORS[i % CAT_COLORS.length]),
+        borderRadius:5, borderSkipped:false,
+      }]
+    },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>`₹${fmtFull(c.raw)} · ${rows[c.dataIndex].pct}% · ${rows[c.dataIndex].customers} customers`}}
+      },
+      scales:{
+        x:{grid:{color:'rgba(0,0,0,0.05)'}, ticks:{font:{family:'DM Sans',size:11},callback:v=>'₹'+fmt(v),color:'#7A7A7A'}},
+        y:{grid:{display:false}, ticks:{font:{family:'DM Sans',size:11},color:'#333'}}
+      }
+    }
+  });
+  renderDrillTable(rows);
+}
+
+async function loadProductTrend() {
+  const rows = await api('/api/product-trend?' + qs());
+  if (!rows || !rows.length) return;
+  destroyChart('ptend');
+  const ctx = document.getElementById('chart-ptend').getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,0,280);
+  grad.addColorStop(0,'rgba(198,168,75,0.25)'); grad.addColorStop(1,'rgba(198,168,75,0.02)');
+  charts['ptend'] = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: rows.map(r=>monthLabel(r.month)),
+      datasets:[{
+        label:'Revenue', data: rows.map(r=>r.amount),
+        borderColor:'#C6A84B', backgroundColor: grad,
+        borderWidth:2.5, tension:0.38, fill:true,
+        pointRadius:4, pointBackgroundColor:'#C6A84B',
+      },{
+        label:'Qty Sold', data: rows.map(r=>r.qty),
+        borderColor:'#5A8A68', borderDash:[5,5],
+        borderWidth:1.5, tension:0.38, fill:false,
+        pointRadius:3, pointBackgroundColor:'#5A8A68',
+        yAxisID:'y2'
+      }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{font:{family:'DM Sans',size:11},boxWidth:10,padding:8}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.datasetIndex===0 ? '₹'+fmtFull(c.raw) : c.raw+' units')}} },
+      scales:{
+        x:{grid:{display:false}, ticks:{font:{family:'DM Sans',size:10},color:'#7A7A7A'}},
+        y:{grid:{color:'rgba(0,0,0,0.05)'}, ticks:{font:{family:'DM Sans',size:10},callback:v=>'₹'+fmt(v),color:'#7A7A7A'}},
+        y2:{position:'right', grid:{display:false}, ticks:{font:{family:'DM Sans',size:10},color:'#7A7A7A'}}
+      }
+    }
+  });
+}
+
+async function loadDrillCustomers() {
+  const rows = await api('/api/top-customers?limit=10&' + qs());
+  if (!rows || !rows.length) return;
+  const max = rows[0].amount;
+  document.getElementById('tbl-dcust').innerHTML = rows.map((r,i) => {
+    const rc = i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-o';
+    return `<tr>
+      <td><span class="rank ${rc}">${i+1}</span></td>
+      <td><div style="font-weight:500">${r.customer}</div>
+          <div class="bar-fill" style="width:${Math.round(r.amount/max*100)}%"></div></td>
+      <td class="mono">₹${fmtFull(r.amount)}</td>
+      <td style="text-align:right;color:#7A7A7A">${r.invoices}</td>
+      <td><span class="chip">${r.pct}%</span></td>
+    </tr>`;
+  }).join('');
+
+  const cat = F.category !== 'all' ? F.category : 'All Categories';
+  const prod = F.product !== 'all' ? F.product.slice(0,30) : null;
+  document.getElementById('dcust-title').textContent = `Top Customers — ${prod || cat}`;
+}
+
+async function loadDrillTable() {
+  const rows = await api('/api/product-breakdown?limit=100&' + qs());
+  if (!rows) return;
+  drillData = rows;
+  renderDrillTable(rows);
+}
+
+function renderDrillTable(rows) {
+  document.getElementById('dtable-count').textContent = rows.length + ' products';
+  document.getElementById('tbl-drill').innerHTML = rows.map((r,i) => `<tr>
+    <td style="color:#9A9A9A;font-size:12px">${i+1}</td>
+    <td style="font-weight:500">${r.product}</td>
+    <td><span class="chip-cat">${F.category !== 'all' ? F.category : '—'}</span></td>
+    <td class="mono">₹${fmtFull(r.amount)}</td>
+    <td style="text-align:right;color:#7A7A7A">${r.qty}</td>
+    <td style="text-align:right">${r.customers}</td>
+    <td style="text-align:right">${r.invoices}</td>
+    <td><span class="chip">${r.pct}%</span></td>
+  </tr>`).join('');
+}
+
+function filterDrillTable() {
+  const q = document.getElementById('drill-search').value.toLowerCase();
+  const filtered = drillData.filter(r => r.product.toLowerCase().includes(q));
+  renderDrillTable(filtered);
+}
+
+// ═══ TRANSACTIONS ══════════════════════════════════════
+async function loadTransactions(page=1) {
+  txPage = page;
+  if (!HAS_DATA) return;
+  const search = document.getElementById('tx-search')?.value || '';
+  const sort   = document.getElementById('tx-sort')?.value || 'amount';
+  const url    = `/api/transactions?page=${page}&per_page=50&search=${encodeURIComponent(search)}&sort=${sort}&${qs()}`;
+  const d = await api(url);
+  if (!d) return;
+
+  document.getElementById('tx-count').textContent = d.total.toLocaleString() + ' records';
+  const tbody = document.getElementById('tx-body');
+  if (!d.records.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:#9A9A9A">No records match current filters</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = d.records.map(r => `<tr>
+    <td class="mono" style="font-size:12px">#${r.invoice}</td>
+    <td style="font-size:12px;color:#7A7A7A">${r.date||'—'}</td>
+    <td style="font-weight:500">${r.party}</td>
+    <td style="font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.product}">${r.product}</td>
+    <td><span class="chip-cat">${r.category}</span></td>
+    <td style="text-align:right">${r.quantity}</td>
+    <td style="font-size:12px;color:#9A9A9A">${r.unit||'—'}</td>
+    <td class="mono" style="text-align:right">₹${fmtFull(r.amount)}</td>
+  </tr>`).join('');
+
+  const start = (page-1)*50+1, end = Math.min(page*50, d.total);
+  document.getElementById('pg-info').textContent = `Showing ${start}–${end} of ${d.total.toLocaleString()}`;
+  document.getElementById('btn-prev').disabled = page <= 1;
+  document.getElementById('btn-next').disabled = page >= d.pages;
+
+  const pnums = document.getElementById('pg-nums');
+  const maxP = Math.min(d.pages, 7);
+  let nums = '';
+  for (let p=1; p<=maxP; p++) nums += `<button class="pg-btn${p===page?' active':''}" onclick="loadTransactions(${p})">${p}</button>`;
+  if (d.pages > 7) nums += `<span style="color:#9A9A9A;padding:0 4px">…${d.pages}</span>`;
+  pnums.innerHTML = nums;
+}
+function txPageChange(dir) { loadTransactions(txPage + dir); }
+
+// ═══ INIT ══════════════════════════════════════════════
+async function init() {
+  if (!HAS_DATA) return;
+
+  // Get date bounds for the file
+  const bounds = await api('/api/date-bounds');
+  if (bounds) {
+    dateBounds = bounds;
+    document.getElementById('gf-from').min = bounds.min;
+    document.getElementById('gf-from').max = bounds.max;
+    document.getElementById('gf-to').min   = bounds.min;
+    document.getElementById('gf-to').max   = bounds.max;
+  }
+
+  // Populate category dropdown
+  const cats = await api('/api/category-list');
+  if (cats) {
+    const sel = document.getElementById('gf-cat');
+    cats.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.category; o.textContent = `${c.category} (₹${fmt(c.total)})`;
+      sel.appendChild(o);
+    });
+  }
+
+  // Set "All" pill active
+  document.querySelector('.gf-pill')?.classList.add('active');
+
+  // Drag & drop on upload strip
+  const strip = document.getElementById('upload-strip');
+  if (strip) {
+    strip.addEventListener('dragover', e => { e.preventDefault(); strip.classList.add('drag-active'); });
+    strip.addEventListener('dragleave', () => strip.classList.remove('drag-active'));
+    strip.addEventListener('drop', e => {
+      e.preventDefault(); strip.classList.remove('drag-active');
+      const f = e.dataTransfer.files[0];
+      if (f) { const dt = new DataTransfer(); dt.items.add(f);
+        document.getElementById('file-input').files = dt.files;
+        handleFileChange(document.getElementById('file-input')); }
+    });
+  }
+
+  updateFilterSummary();
+  loadAllCharts();
+}
+
+function handleFileChange(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 16*1024*1024) { alert('File too large (max 16MB)'); input.value=''; return; }
+  document.getElementById('file-label-text').textContent = '✅ ' + file.name;
+  document.getElementById('btn-upload').style.display = 'inline-flex';
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+{% endblock %}

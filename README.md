@@ -6,32 +6,6 @@ A professional full-stack web application for analyzing and visualizing organic 
 
 ## 🚀 Quick Start
 
-### 1. Install Python dependencies
-
-```bash
-cd kaadu
-pip install -r requirements.txt
-```
-
-### 2. Run the application
-
-```bash
-python app.py
-```
-
-### 3. Open in browser
-
-```
-http://localhost:5000
-```
-
-### 4. Login with default credentials
-
-```
-Username: admin
-Password: kaadu@2024
-```
-
 ---
 
 ## 📁 Project Structure
@@ -180,31 +154,7 @@ The parser auto-detects columns using aliases. These column names (case-insensit
 
 ---
 
-## ⚙️ Environment Variables (Optional)
 
-Create a `.env` file:
-
-```
-SECRET_KEY=your-strong-secret-key-here
-DATABASE_URL=sqlite:///instance/kaadu.db
-```
-
-For PostgreSQL in production:
-```
-DATABASE_URL=postgresql://user:password@localhost/kaadu_db
-```
-
----
-
-## 🔒 Production Deployment
-
-1. Change `SECRET_KEY` in `.env`
-2. Set `FLASK_ENV=production`
-3. Use Gunicorn: `gunicorn -w 4 -b 0.0.0.0:8000 app:app`
-4. Use Nginx as reverse proxy
-5. Consider PostgreSQL instead of SQLite for concurrent users
-
----
 
 ## 📦 Tech Stack
 
@@ -218,6 +168,4 @@ DATABASE_URL=postgresql://user:password@localhost/kaadu_db
 | Charts | Chart.js 4.4 |
 | Fonts | Google Fonts (Playfair Display + DM Sans) |
 
----
 
-Built with ❤️ for **Kaadu Organic Farm** | Tamil Nadu, India
